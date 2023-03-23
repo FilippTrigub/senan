@@ -1,27 +1,30 @@
 import os
 
 import numpy as np
+import argparse
 
 from Feeder import TwitterFeeder
 from GraphContentGenerator import GraphContentGenerator
 from SentimentAnalyzer import SentimentAnalyzer
 from video_creation.background import download_background, chop_background_video
 from video_creation.final_video import make_final_video
-from video_creation.screenshot_downloader import download_screenshots_of_reddit_posts
 from video_creation.voices import save_text_to_mp3
 from emoji import emoji_count
 
 
 class ContentCreator:
     def __init__(self, query):
+        self.feeder = None
         self.quantity_of_tweets = 10
         print(f'Get tweets for {query}')
         self.query = query
-        self.feeder = TwitterFeeder(self.query, self.quantity_of_tweets)
         self.engine = SentimentAnalyzer()
         # self.producer
 
     def test(self):
+        arguments = self.parse_arguemnts()
+        self.feeder = TwitterFeeder(self.query, self.quantity_of_tweets, arguments.config.name)
+
         tweets = self.feeder.get_query_tweets()
 
         # convert tweets into a vader-fitting format
@@ -155,6 +158,20 @@ class ContentCreator:
                                     + f'Higher values along that axis mean a more {direction_statement} sentiment.'
 
         return correlation_statement
+
+    def parse_arguemnts(self):
+        default_config_path = 'config_empty.yaml'
+        parser = argparse.ArgumentParser(
+            description=("Searches for flats on Immobilienscout24.de and wg-gesucht.de"
+                         " and sends results to Telegram User"),
+            epilog="Designed by Nody"
+        )
+        parser.add_argument('--config', '-c',
+                            type=argparse.FileType('r', encoding='UTF-8'),
+                            default=default_config_path,
+                            help=f'Config file to use. If not set, try to use "{default_config_path}"'
+                            )
+        return parser.parse_args()
 
 
 if __name__ == "__main__":

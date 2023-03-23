@@ -10,11 +10,10 @@ class TwitterFeeder:
     bearer_token = None
 
     QUERY = ' -is:retweet -is:quote -has:mentions lang:en'
-    config_path = 'config.yaml'
 
-    def __init__(self, query, quantity_of_tweets):
+    def __init__(self, query, quantity_of_tweets, config_path):
         self.QUERY = query + self.QUERY
-        self.set_config(self.config_path)
+        self.set_config(config_path)
         self.quantity_of_tweets = quantity_of_tweets
         self.client = tweepy.Client(self.bearer_token)
 
