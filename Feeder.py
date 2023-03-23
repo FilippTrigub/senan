@@ -1,18 +1,20 @@
 import tweepy
+import yaml as yaml
 
 
 class TwitterFeeder:
-    key = '3WUh5iiia2hKFOhD2kFvC6hk7'
-    secret = 'hksle58dXcT38bzJNwUdHmTs8LP7FRoFjQaPPFAFrfDjiavB8o'
-    access_token = '1257688956428341249-tcbkjpwgjSZgOoe6FTs7ZXdvyReLrB'
-    access_token_secret = '1jO9akCleUU8hNOnqcia5v94mnhdRsiMsykBWc0VmVbC6'
-
-    bearer_token = 'AAAAAAAAAAAAAAAAAAAAALEDeQEAAAAAnfu%2FhYBVPHHDi1P7d%2FRnCLhKKMA%3DmzjGpnypKzdkBYTsYUszmxzcioN3JXEgqUPM0VogTZKvNSE75U'
+    key = None
+    secret = None
+    access_token = None
+    access_token_secret = None
+    bearer_token = None
 
     QUERY = ' -is:retweet -is:quote -has:mentions lang:en'
+    config_path = 'config.yaml'
 
     def __init__(self, query, quantity_of_tweets):
         self.QUERY = query + self.QUERY
+        self.set_config(self.config_path)
         self.quantity_of_tweets = quantity_of_tweets
         self.client = tweepy.Client(self.bearer_token)
 
@@ -70,3 +72,12 @@ class TwitterFeeder:
                 except Exception as e:
                     print("Failed while fetching replies {}".format(e))
                     break
+
+    def set_config(self, path):
+        with open(path, "r") as stream:
+            config = yaml.safe_load(stream)
+        self.key = config['key']
+        self.secret = config['secret']
+        self.access_token = config['access_token']
+        self.access_token_secret = config['access_token_secret']
+        self.bearer_token = config['bearer_token']
