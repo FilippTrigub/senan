@@ -1,5 +1,7 @@
 import os
 
+import openai
+
 import numpy as np
 import argparse
 
@@ -13,17 +15,23 @@ from emoji import emoji_count
 
 
 class ContentCreator:
-    def __init__(self, query):
-        self.feeder = None
-        self.quantity_of_tweets = 10
-        print(f'Get tweets for {query}')
-        self.query = query
-        self.engine = SentimentAnalyzer()
-        # self.producer
+    query = 'dummy_query'
+    default_config_path = 'config_empty.yaml'
 
-    def test(self):
-        arguments = self.parse_arguemnts()
-        self.feeder = TwitterFeeder(self.query, self.quantity_of_tweets, arguments.config.name)
+    def __init__(self):
+        self.feeder = None
+        self.use_gpt = False
+        self.quantity_of_tweets = 10
+        arguments = self.parse_arguements()
+        self.query = arguments.query
+        self.config_path = arguments.config
+        self.openai_key = arguments.key
+
+        print(f'Get tweets for {self.query}')
+        self.engine = SentimentAnalyzer()
+
+    def create(self):
+        self.feeder = TwitterFeeder(self.query, self.quantity_of_tweets, self.config_path)
 
         tweets = self.feeder.get_query_tweets()
 
@@ -73,26 +81,11 @@ class ContentCreator:
 
     def create_content(self, vader_scores, statistics):
         # todo create more graphs based on analysis
-        content_object = dict()
         content_text = self.get_text_for_images(vader_scores, statistics)
-        for key, content_item in content_text.items():
-            if key == 'intro_text':
-                content_object['intro_object'] = {'text': f'Opinions on {self.query}'}
-            elif key == 'score_text':
-                basic_score_object = \
-                    GraphContentGenerator.get_basic_score_object(content_item, vader_scores)
-                content_object['basic_score_object'] = basic_score_object
-            elif key == 'lengths':
-                compound_vs_length_object = \
-                    GraphContentGenerator.get_compound_vs_length_object(content_item, vader_scores, statistics[key])
-                content_object['compound_vs_length_object'] = compound_vs_length_object
-            elif key == 'emoji counts':
-                compound_vs_emoji_count_object = \
-                    GraphContentGenerator.get_compound_vs_emoji_count_object(content_item, vader_scores,
-                                                                             statistics[key])
-                content_object['compound_vs_emoji_count'] = compound_vs_emoji_count_object
-                # todo sync all the terminology
-        content_object['outro_text'] = {'text': 'Follow to know, what people think!'}
+        content_object = self.create_content_object_without_gpt(content_text, vader_scores, statistics)
+        if self.use_gpt:
+            content_object = self.create_content_object_with_gpt(content_object)
+
         return content_object
 
     def make_video(self, content_object):
@@ -159,21 +152,70 @@ class ContentCreator:
 
         return correlation_statement
 
-    def parse_arguemnts(self):
-        default_config_path = 'config_empty.yaml'
+    def parse_arguements(self):
         parser = argparse.ArgumentParser(
             description=("Searches for flats on Immobilienscout24.de and wg-gesucht.de"
                          " and sends results to Telegram User"),
-            epilog="Designed by Nody"
+            epilog="Designed by Trigu"
         )
+        parser.add_argument('--query', '-q',
+                            type=str,
+                            default=self.query,
+                            help=f'Query for twitter. If not set, use "{self.query}"'
+                            )
         parser.add_argument('--config', '-c',
-                            type=argparse.FileType('r', encoding='UTF-8'),
-                            default=default_config_path,
-                            help=f'Config file to use. If not set, try to use "{default_config_path}"'
+                            type=str,
+                            default=self.default_config_path,
+                            help=f'Config file to use. If not set, try to use "{self.default_config_path}"'
+                            )
+        parser.add_argument('--key', '-k',
+                            type=str,
+                            default='',
+                            help='OpenAI key'
                             )
         return parser.parse_args()
 
+    def create_content_object_without_gpt(self, content_text, vader_scores, statistics):
+        content_object = dict()
+        for key, content_item in content_text.items():
+            if key == 'intro_text':
+                content_object['intro_object'] = {'text': f'Opinions on {self.query}'}
+            elif key == 'score_text':
+                basic_score_object = \
+                    GraphContentGenerator.get_basic_score_object(content_item, vader_scores)
+                content_object['basic_score_object'] = basic_score_object
+            elif key == 'lengths':
+                compound_vs_length_object = \
+                    GraphContentGenerator.get_compound_vs_length_object(content_item, vader_scores, statistics[key])
+                content_object['compound_vs_length_object'] = compound_vs_length_object
+            elif key == 'emoji counts':
+                compound_vs_emoji_count_object = \
+                    GraphContentGenerator.get_compound_vs_emoji_count_object(content_item, vader_scores,
+                                                                             statistics[key])
+                content_object['compound_vs_emoji_count'] = compound_vs_emoji_count_object
+                # todo sync all the terminology
+        content_object['outro_text'] = {'text': 'Follow to know, what people think!'}
+        return content_object
+
+    def create_content_object_with_gpt(self, content_object):
+        gpt_prompt = f'Paraphrase the following text to sound enthusiastic and fit in a 30 second video:\n\n ' \
+                     f'Opinions on {self.query}: '
+        for key, content_item in content_object.items():
+            gpt_prompt += f'{content_item["text"]} '
+
+        openai.api_key = self.openai_key
+        content_object['gpt'] = {'text': openai.Completion.create(
+            engine="text-davinci-002",
+            prompt=gpt_prompt,
+            temperature=0.5,
+            max_tokens=256,
+            top_p=1.0,
+            frequency_penalty=0.0,
+            presence_penalty=0.0
+        )}
+        return content_object
+
 
 if __name__ == "__main__":
-    content_creator = ContentCreator("Ukraine")
-    content_creator.test()
+    content_creator = ContentCreator()
+    content_creator.create()
