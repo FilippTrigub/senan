@@ -9,7 +9,7 @@ from Feeder import TwitterFeeder
 from GraphContentGenerator import GraphContentGenerator
 from SentimentAnalyzer import SentimentAnalyzer
 from video_creation.background import download_background, chop_background_video
-from video_creation.final_video import make_final_video
+from video_creation.final_video import make_final_video, make_final_video_with_gpt
 from video_creation.voices import save_text_to_mp3
 from emoji import emoji_count
 
@@ -17,10 +17,11 @@ from emoji import emoji_count
 class ContentCreator:
     query = 'dummy_query'
     default_config_path = 'config_empty.yaml'
+    use_gpt = True
 
     def __init__(self):
         self.feeder = None
-        self.use_gpt = False
+
         self.quantity_of_tweets = 10
         arguments = self.parse_arguements()
         self.query = arguments.query
@@ -47,8 +48,11 @@ class ContentCreator:
         # create content
         content_object = self.create_content(vader_scores, statistics)
 
+        if self.use_gpt:
+            content_object = self.create_content_object_with_gpt(content_object)
+
         # make the video
-        self.make_video(content_object)
+        self.make_video(content_object, self.use_gpt)
 
     def convert_tweets(self, tweets):
         return [tweet.text for tweet in tweets.data]
@@ -83,22 +87,23 @@ class ContentCreator:
         # todo create more graphs based on analysis
         content_text = self.get_text_for_images(vader_scores, statistics)
         content_object = self.create_content_object_without_gpt(content_text, vader_scores, statistics)
-        if self.use_gpt:
-            content_object = self.create_content_object_with_gpt(content_object)
 
         return content_object
 
-    def make_video(self, content_object):
+    def make_video(self, content_object, use_gpt):
         total_audio_duration, _ = save_text_to_mp3(content_object)
         download_background()
         chop_background_video(total_audio_duration)
-        make_final_video(content_object)
+        if use_gpt:
+            make_final_video_with_gpt(content_object)
+        else:
+            make_final_video(content_object)
 
     def get_text_for_images(self, scores, statistics):
         content_text = dict()
-        content_text['intro_text'] = f'What does twitter think about {self.query}?' \
+        content_text['intro_text'] = f'What does twitter think about {self.query}? ' \
                                      f'SENAN has analyzed the sentiment of {self.quantity_of_tweets} ' \
-                                     f'tweets using Vader and Seaborn.'
+                                     f'tweets using Vader and Seaborn. '
         content_text['score_text'] = self.get_score_describtion(scores)
         for key, statistic in statistics.items():
             # todo write about corr with sentiment and disperision of data
@@ -109,15 +114,15 @@ class ContentCreator:
     def get_score_describtion(self, scores):
         description = scores.describe()
         if description.loc['mean']['compound'] < 0.025:
-            average_statement = 'negative'
+            average_statement = 'negative '
         elif description.loc['mean']['compound'] > 0.025:
-            average_statement = 'positive'
+            average_statement = 'positive '
         else:
-            average_statement = 'neutral'
+            average_statement = 'neutral '
         if abs(description.loc['mean']['compound'] > 0.075):
-            average_statement = 'very' + average_statement
+            average_statement = 'very ' + average_statement
         elif 0.05 > abs(description.loc['mean']['compound'] > 0.025):
-            average_statement = 'rather' + average_statement
+            average_statement = 'rather ' + average_statement
 
         spread = description.loc['std']['compound'] / (
             abs(description.loc['min']['compound'] + abs(description.loc['max']['compound'])))
@@ -135,20 +140,19 @@ class ContentCreator:
         correlation_statement = f'The {key} of the tweets '
         absolute_correlation_factor = abs(statistic['correlation'])
         if absolute_correlation_factor >= 0.75:
-            correlation_statement += 'correlate strongly'
+            correlation_statement += 'correlate strongly '
         elif 0.75 > absolute_correlation_factor >= 0.5:
-            correlation_statement += 'correlate moderately'
+            correlation_statement += 'correlate moderately '
         elif 0.5 > absolute_correlation_factor >= 0.25:
-            correlation_statement += 'correlate weakly'
+            correlation_statement += 'correlate weakly '
         else:
-            correlation_statement += 'do not correlate'
-        correlation_statement = correlation_statement + 'with their scores.'
+            correlation_statement += 'do not correlate '
+        correlation_statement = correlation_statement + 'with their scores. '
 
         if absolute_correlation_factor >= 0.25:
-            direction_statement = 'positive' if np.sign(statistic['correlation']) > 0 else 'negative'
-            # todo replace Higher values along that axis with something else cumbersome
+            direction_statement = 'positive ' if np.sign(statistic['correlation']) > 0 else 'negative '
             correlation_statement = correlation_statement \
-                                    + f'Higher values along that axis mean a more {direction_statement} sentiment.'
+                                    + f'Higher values mean a more {direction_statement} sentiment. '
 
         return correlation_statement
 
@@ -156,7 +160,7 @@ class ContentCreator:
         parser = argparse.ArgumentParser(
             description=("Searches for flats on Immobilienscout24.de and wg-gesucht.de"
                          " and sends results to Telegram User"),
-            epilog="Designed by Trigu"
+            epilog="Designed by Trigub"
         )
         parser.add_argument('--query', '-q',
                             type=str,
@@ -179,7 +183,7 @@ class ContentCreator:
         content_object = dict()
         for key, content_item in content_text.items():
             if key == 'intro_text':
-                content_object['intro_object'] = {'text': f'Opinions on {self.query}'}
+                content_object['intro_object'] = {'text': content_item}
             elif key == 'score_text':
                 basic_score_object = \
                     GraphContentGenerator.get_basic_score_object(content_item, vader_scores)
@@ -198,7 +202,8 @@ class ContentCreator:
         return content_object
 
     def create_content_object_with_gpt(self, content_object):
-        gpt_prompt = f'Paraphrase the following text to sound enthusiastic and fit in a 30 second video:\n\n ' \
+        gpt_prompt = f'Make the following text to sound engaging, enthusiastic and less than 60 seconds long:' \
+                     f'\n' \
                      f'Opinions on {self.query}: '
         for key, content_item in content_object.items():
             gpt_prompt += f'{content_item["text"]} '
@@ -212,7 +217,7 @@ class ContentCreator:
             top_p=1.0,
             frequency_penalty=0.0,
             presence_penalty=0.0
-        )}
+        ).choices[0].text}
         return content_object
 
 

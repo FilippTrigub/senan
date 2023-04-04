@@ -21,4 +21,3 @@ class GraphContentGenerator:
     def get_basic_score_object(cls, text, vader_scores):
         return {'text': text,
                 'graph': sns.histplot(x=vader_scores['compound'])}
-
