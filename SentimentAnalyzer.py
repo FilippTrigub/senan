@@ -1,13 +1,4 @@
-import re
-
-import chardet as chardet
 import pandas as pd
-import nltk
-from nltk.corpus import stopwords
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, r2_score
-from sklearn.model_selection import train_test_split
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 

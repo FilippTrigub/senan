@@ -5,9 +5,12 @@ import openai
 import numpy as np
 import argparse
 
+from dotenv import load_dotenv
+
 from Feeder import TwitterFeeder
 from GraphContentGenerator import GraphContentGenerator
 from SentimentAnalyzer import SentimentAnalyzer
+from utils import misc
 from video_creation.background import download_background, chop_background_video
 from video_creation.final_video import make_final_video, make_final_video_with_gpt
 from video_creation.voices import save_text_to_mp3
@@ -16,23 +19,24 @@ from emoji import emoji_count
 
 class ContentCreator:
     query = 'dummy_query'
-    default_config_path = 'config_empty.yaml'
-    use_gpt = True
+    default_config_path = 'config.yaml.template'
+    use_gpt = False
 
     def __init__(self):
         self.feeder = None
-
         self.quantity_of_tweets = 10
+
+        load_dotenv()
         arguments = self.parse_arguements()
-        self.query = arguments.query
+        self.query = os.getenv('QUERY')
         self.config_path = arguments.config
-        self.openai_key = arguments.key
+        self.openai_key = os.getenv('OPENAI_KEY')
 
         print(f'Get tweets for {self.query}')
         self.engine = SentimentAnalyzer()
 
     def create(self):
-        self.feeder = TwitterFeeder(self.query, self.quantity_of_tweets, self.config_path)
+        self.feeder = TwitterFeeder(self.query, self.quantity_of_tweets)
 
         tweets = self.feeder.get_query_tweets()
 
@@ -51,11 +55,20 @@ class ContentCreator:
         if self.use_gpt:
             content_object = self.create_content_object_with_gpt(content_object)
 
+        # show most controversial tweets
+        self.add_most_controversial_tweets(content_object, tweets, vader_scores)
+
+        # add outro
+        content_object['outro_text'] = {'text': 'Follow to know, what people think!'}
+
         # make the video
-        self.make_video(content_object, self.use_gpt)
+        filename = self.make_video(content_object, self.use_gpt)
+
+        return filename
 
     def convert_tweets(self, tweets):
-        return [tweet.text for tweet in tweets.data]
+        tweet_texts = [tweet.text for tweet in tweets.data if self.tweet_is_valid(tweet.text)]
+        return tweet_texts
 
     def get_statistics(self, sentences, scores):
         """
@@ -84,6 +97,7 @@ class ContentCreator:
         return {'data': counter_list, 'correlation': correlation_with_scores}
 
     def create_content(self, vader_scores, statistics):
+        misc.remove_files_in_dir('assets/png')
         # todo create more graphs based on analysis
         content_text = self.get_text_for_images(vader_scores, statistics)
         content_object = self.create_content_object_without_gpt(content_text, vader_scores, statistics)
@@ -95,9 +109,10 @@ class ContentCreator:
         download_background()
         chop_background_video(total_audio_duration)
         if use_gpt:
-            make_final_video_with_gpt(content_object)
+            filename = make_final_video_with_gpt(content_object)
         else:
-            make_final_video(content_object)
+            filename = make_final_video(content_object)
+        return filename
 
     def get_text_for_images(self, scores, statistics):
         content_text = dict()
@@ -106,7 +121,6 @@ class ContentCreator:
                                      f'tweets using Vader and Seaborn. '
         content_text['score_text'] = self.get_score_describtion(scores)
         for key, statistic in statistics.items():
-            # todo write about corr with sentiment and disperision of data
             content_text[key] = self.get_correlation_statement(key, statistic)
 
         return content_text
@@ -198,7 +212,6 @@ class ContentCreator:
                                                                              statistics[key])
                 content_object['compound_vs_emoji_count'] = compound_vs_emoji_count_object
                 # todo sync all the terminology
-        content_object['outro_text'] = {'text': 'Follow to know, what people think!'}
         return content_object
 
     def create_content_object_with_gpt(self, content_object):
@@ -219,6 +232,31 @@ class ContentCreator:
             presence_penalty=0.0
         ).choices[0].text}
         return content_object
+
+    def add_most_controversial_tweets(self, content_object, tweets, vader_scores):
+        most_negative_index, most_positive_index = misc.find_min_and_max_float_index(vader_scores['compound'])
+        most_negative_tweet = tweets.data[most_negative_index]
+        most_positive_tweet = tweets.data[most_positive_index]
+
+        image_data_dict = self.feeder.extract_tweet_images(keys=['most_negative_tweet', 'most_positive_tweet'],
+                                                           tweet_id=[most_negative_tweet.id, most_positive_tweet.id],
+                                                           usernames=[
+                                                               tweets[1]['users'][most_positive_index].data['username'],
+                                                               tweets[1]['users'][most_negative_index].data[
+                                                                   'username']])
+
+        content_object['most_negative_tweet'] = {
+            'text': misc.remove_urls_and_emojis_and_leave_only_english_text(most_negative_tweet.text),
+            'image': image_data_dict[most_negative_tweet.id]}
+        content_object['most_positive_tweet'] = {
+            'text': misc.remove_urls_and_emojis_and_leave_only_english_text(most_positive_tweet.text),
+            'image': image_data_dict[most_positive_tweet.id]}
+        return content_object
+
+    def tweet_is_valid(self, text):
+        if emoji_count(text) > 9:
+            return False
+        return True
 
 
 if __name__ == "__main__":

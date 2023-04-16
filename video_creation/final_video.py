@@ -47,13 +47,16 @@ def make_final_video(content_object):
         image_path = f"assets/png/{key}.png"
         if content_item.keys().__len__() == 1:
             # Intro clip
-            video_clips.append(TextClip(content_item['text'], fontsize=70, color='black', bg_color='white')
-                               .set_position(('center', 'bottom'))
-                               .set_duration(audio_clips[-1].duration)
-                               .set_opacity(float(opacity))
-                               )
+            video_clips.append(
+                TextClip(content_item['text'], fontsize=70, color='black', bg_color='white', size=(W - 100, H),
+                         method='caption')
+                .set_position(('center', 'bottom'))
+                .set_duration(audio_clips[-1].duration)
+                .set_opacity(float(opacity))
+                )
         else:
-            save_figure_if_graph(content_item, image_path)
+            if 'graph' in content_item.keys():
+                save_figure_if_graph(content_item, image_path)
             video_clips.append(
                 ImageClip(image_path)
                 .set_duration(audio_clips[-1].duration)
@@ -61,7 +64,8 @@ def make_final_video(content_object):
                 .resize(width=W - 100)
                 .set_opacity(float(opacity)),
             )
-    _save_video(audio_clips, video_clips, background_clip)
+    filename = _save_video(audio_clips, video_clips, background_clip)
+    return filename
 
 
 def make_final_video_with_gpt(content_object):
@@ -92,7 +96,8 @@ def make_final_video_with_gpt(content_object):
                                )
         if content_item.keys().__len__() == 2:
             # not outro or gpt
-            save_figure_if_graph(content_item, image_path)
+            if 'graph' in content_item.keys():
+                save_figure_if_graph(content_item, image_path)
             video_clips.append(
                 ImageClip(image_path)
                 .set_duration(individual_duration)
@@ -100,7 +105,9 @@ def make_final_video_with_gpt(content_object):
                 .resize(width=W - 100)
                 .set_opacity(float(opacity)),
             )
-    _save_video(gpt_audio_clip, video_clips, background_clip)
+
+    filename = _save_video(audio_clips, video_clips, background_clip)
+    return filename
 
 
 def _save_video(audio_clips, video_clips, background_clip):
@@ -115,6 +122,7 @@ def _save_video(audio_clips, video_clips, background_clip):
     final = CompositeVideoClip([background_clip, video_concat])
     filename = (re.sub('[?\"%*:|<>]', '', ("assets/" + timestamp + "_senan.mp4")))
     final.write_videofile(filename, fps=45, audio_codec="aac", audio_bitrate="192k")
+    return filename
 
 
 def _prepare_video():

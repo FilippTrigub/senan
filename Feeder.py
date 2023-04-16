@@ -1,5 +1,11 @@
+import os
+from typing import List
+
 import tweepy
 import yaml as yaml
+from dotenv import load_dotenv
+
+from utils import misc
 
 
 class TwitterFeeder:
@@ -11,11 +17,16 @@ class TwitterFeeder:
 
     QUERY = ' -is:retweet -is:quote -has:mentions lang:en'
 
-    def __init__(self, query, quantity_of_tweets, config_path):
+    def __init__(self, query, quantity_of_tweets):
         self.QUERY = query + self.QUERY
-        self.set_config(config_path)
+        self.set_config()
         self.quantity_of_tweets = quantity_of_tweets
         self.client = tweepy.Client(self.bearer_token)
+
+        # Authenticate with Twitter API
+        auth = tweepy.OAuthHandler(self.key, self.secret)
+        auth.set_access_token(self.access_token, self.access_token_secret)
+        self.api = tweepy.API(auth)
 
     # get tweets
     def get_query_tweets(self):
@@ -45,6 +56,7 @@ class TwitterFeeder:
         self.tweet_id = self.selected_tweet.id
 
     def get_replies(self):
+        # WARNING: this method is not used because it requires elevated permissions for the Twitter API
         self.replies_full_text = []
         self.query_tweets = self.get_query_tweets()
         while len(self.query_tweets) > 0 and len(self.replies_full_text) == 0:
@@ -72,11 +84,23 @@ class TwitterFeeder:
                     print("Failed while fetching replies {}".format(e))
                     break
 
-    def set_config(self, path):
-        with open(path, "r") as stream:
-            config = yaml.safe_load(stream)
-        self.key = config['key']
-        self.secret = config['secret']
-        self.access_token = config['access_token']
-        self.access_token_secret = config['access_token_secret']
-        self.bearer_token = config['bearer_token']
+    def extract_tweet_images(self, keys, tweet_id: List, usernames: List) -> dict:
+        # Get tweet data from Twitter API and Selenium
+        image_paths = dict()
+        for key, tweet_id, username in zip(keys, tweet_id, usernames):
+            # Check if tweet has media
+            media_url = f'https://twitter.com/{username}/status/{tweet_id}'
+            path = f'assets/png/{key}.png'
+            misc.html_to_png(media_url, path)
+            image_paths[tweet_id] = path
+
+        return image_paths
+
+    def set_config(self):
+        load_dotenv()
+        self.key = os.getenv('TWITTER_KEY')
+        self.secret = os.getenv('TWITTER_SECRET')
+        self.access_token = os.getenv('TWITTER_ACCESS_TOKEN')
+        self.access_token_secret = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
+        self.bearer_token = os.getenv('TWITTER_BEARER_TOKEN')
+
