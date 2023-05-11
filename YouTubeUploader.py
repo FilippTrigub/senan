@@ -12,7 +12,7 @@ def upload_video_to_youtube(file_path, title, description, category, privacy):
     flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file=os.getenv('CLIENT_SECRETS_FILE_PATH'),
                                                      scopes=['https://www.googleapis.com/auth/youtube.upload'])
     credentials = flow.run_local_server(port=0)
-    client = build('youtube', 'v3', developerKey=os.getenv('GOOGLE_API_KEY'), credentials=credentials)
+    client = build('youtube', 'v3', credentials=credentials)
 
     # Create a new video resource
     body = {

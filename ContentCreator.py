@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from Feeder import TwitterFeeder
 from GraphContentGenerator import GraphContentGenerator
 from SentimentAnalyzer import SentimentAnalyzer
+from tweet_statistics import get_length_statistic, get_emoji_count_statistic, get_lexical_diversity_statistic, \
+    get_average_word_length_statistic
 from utils import misc
 from video_creation.background import download_background, chop_background_video
 from video_creation.final_video import make_final_video, make_final_video_with_gpt
@@ -81,20 +83,11 @@ class ContentCreator:
         :param scores: VADER scores, DataFrame
         :return: statistics, dict of dicts
         """
-        statistics = {'lengths': self.get_length_statistic(sentences, scores),
-                      'emoji counts': self.get_emoji_count_statistic(sentences, scores)}
+        statistics = {'lengths': get_length_statistic(sentences, scores),
+                      'emoji counts': get_emoji_count_statistic(sentences, scores),
+                      'lexical diversity': get_lexical_diversity_statistic(sentences, scores),
+                      'average word length': get_average_word_length_statistic(sentences, scores)}
         return statistics
-
-    def get_length_statistic(self, sentences, scores):
-        lengths_of_sentences = [len(sentence) for sentence in sentences]
-        correlation_with_scores = np.corrcoef(lengths_of_sentences, scores['compound'])[0][1]
-        return {'data': lengths_of_sentences, 'correlation': correlation_with_scores}
-
-    @staticmethod
-    def get_emoji_count_statistic(sentences, scores):
-        counter_list = [emoji_count(sentence) for sentence in sentences]
-        correlation_with_scores = np.corrcoef(counter_list, scores['compound'])[0][1]
-        return {'data': counter_list, 'correlation': correlation_with_scores}
 
     def create_content(self, vader_scores, statistics):
         misc.remove_files_in_dir('assets/png')
@@ -197,20 +190,20 @@ class ContentCreator:
         content_object = dict()
         for key, content_item in content_text.items():
             if key == 'intro_text':
-                content_object['intro_object'] = {'text': content_item}
+                content_object[key] = {'text': content_item}
             elif key == 'score_text':
                 basic_score_object = \
                     GraphContentGenerator.get_basic_score_object(content_item, vader_scores)
-                content_object['basic_score_object'] = basic_score_object
+                content_object[key] = basic_score_object
             elif key == 'lengths':
                 compound_vs_length_object = \
                     GraphContentGenerator.get_compound_vs_length_object(content_item, vader_scores, statistics[key])
-                content_object['compound_vs_length_object'] = compound_vs_length_object
+                content_object[key] = compound_vs_length_object
             elif key == 'emoji counts':
                 compound_vs_emoji_count_object = \
                     GraphContentGenerator.get_compound_vs_emoji_count_object(content_item, vader_scores,
                                                                              statistics[key])
-                content_object['compound_vs_emoji_count'] = compound_vs_emoji_count_object
+                content_object[key] = compound_vs_emoji_count_object
                 # todo sync all the terminology
         return content_object
 
