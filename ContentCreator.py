@@ -1,11 +1,10 @@
 import os
-
-import openai
+from typing import Dict, Tuple
 
 import numpy as np
-import argparse
 
 from dotenv import load_dotenv
+from tweepy import Tweet
 
 from Feeder import TwitterFeeder
 from GraphContentGenerator import get_basic_score_object, get_compound_vs_length_object, \
@@ -16,14 +15,13 @@ from tweet_statistics import get_length_statistic, get_emoji_count_statistic, ge
     get_average_word_length_statistic
 from utils import misc
 from video_creation.background import download_background, chop_background_video
-from video_creation.final_video import make_final_video, make_final_video_with_gpt
+from video_creation.final_video import make_final_video
 from video_creation.voices import save_text_to_mp3
 from emoji import emoji_count
 
 
 class ContentCreator:
     query = 'dummy_query'
-    default_config_path = 'config.yaml.template'
     use_gpt = False
     STATISTICS = ['lengths', 'emoji counts', 'lexical diversity', 'average word length']
     STATISTICS_GETTER_MAPPING = {STATISTICS[0]: get_length_statistic,
@@ -37,13 +35,11 @@ class ContentCreator:
 
     def __init__(self):
         self.feeder = None
-        self.quantity_of_tweets = 10
+        self.quantity_of_tweets = 100
 
         load_dotenv()
-        arguments = self.parse_arguements()
         self.query = os.getenv('QUERY')
-        self.config_path = arguments.config
-        self.openai_key = os.getenv('OPENAI_KEY')
+        self.openai_api_key = os.getenv('OPENAI_API_KEY')
 
         print(f'Get tweets for {self.query}')
         self.engine = SentimentAnalyzer()
@@ -51,6 +47,10 @@ class ContentCreator:
     def create(self):
         self.feeder = TwitterFeeder(self.query, self.quantity_of_tweets)
 
+        # clean up
+        misc.remove_files_in_dir('assets/png')
+
+        # get tweets
         tweets = self.feeder.get_query_tweets()
 
         # convert tweets into a vader-fitting format
@@ -63,16 +63,7 @@ class ContentCreator:
         statistics = self.get_statistics(sentences, vader_scores)
 
         # create content
-        content_object = self.create_content(vader_scores, statistics)
-
-        if self.use_gpt:
-            content_object = self.create_content_object_with_gpt(content_object)
-
-        # show most controversial tweets
-        self.add_most_controversial_tweets(content_object, tweets, vader_scores)
-
-        # add outro
-        content_object['outro_text'] = {'text': 'Follow to know, what people think!'}
+        content_object = self.create_content(tweets, vader_scores, statistics)
 
         # make the video
         filename = self.make_video(content_object, self.use_gpt)
@@ -96,10 +87,13 @@ class ContentCreator:
         """
         return {key: self.STATISTICS_GETTER_MAPPING[key](sentences, scores) for key in self.STATISTICS}
 
-    def create_content(self, vader_scores, statistics):
-        misc.remove_files_in_dir('assets/png')
+    def create_content(self, tweets, vader_scores, statistics):
         content_text = self.get_text_for_images(vader_scores, statistics)
-        content_object = self.create_content_object_without_gpt(content_text, vader_scores, statistics)
+        content_object = self.create_content_object(content_text, vader_scores, statistics)
+        content_object = self.add_most_controversial_tweets(content_object, tweets, vader_scores)
+
+        # add outro
+        content_object['outro_text'] = {'text': 'Follow to know, what people think!'}
 
         return content_object
 
@@ -107,10 +101,7 @@ class ContentCreator:
         total_audio_duration, _ = save_text_to_mp3(content_object)
         download_background()
         chop_background_video(total_audio_duration)
-        if use_gpt:
-            filename = make_final_video_with_gpt(content_object)
-        else:
-            filename = make_final_video(content_object)
+        filename = make_final_video(content_object)
         return filename
 
     def get_text_for_images(self, scores, statistics):
@@ -169,30 +160,7 @@ class ContentCreator:
 
         return correlation_statement
 
-    def parse_arguements(self):
-        parser = argparse.ArgumentParser(
-            description=("Searches for flats on Immobilienscout24.de and wg-gesucht.de"
-                         " and sends results to Telegram User"),
-            epilog="Designed by Trigub"
-        )
-        parser.add_argument('--query', '-q',
-                            type=str,
-                            default=self.query,
-                            help=f'Query for twitter. If not set, use "{self.query}"'
-                            )
-        parser.add_argument('--config', '-c',
-                            type=str,
-                            default=self.default_config_path,
-                            help=f'Config file to use. If not set, try to use "{self.default_config_path}"'
-                            )
-        parser.add_argument('--key', '-k',
-                            type=str,
-                            default='',
-                            help='OpenAI key'
-                            )
-        return parser.parse_args()
-
-    def create_content_object_without_gpt(self, content_text, vader_scores, statistics):
+    def create_content_object(self, content_text, vader_scores, statistics) -> Dict[str, Dict[str, str]]:
         content_object = dict()
         for key, content_item in content_text.items():
             if key == 'intro_text':
@@ -203,29 +171,9 @@ class ContentCreator:
                 content_object[key] = self.STATISTICS_OBJECT_MAPPING[key](content_item, vader_scores, statistics[key])
             return content_object
 
-    def create_content_object_with_gpt(self, content_object):
-        gpt_prompt = f'Make the following text to sound engaging, enthusiastic and less than 60 seconds long:' \
-                     f'\n' \
-                     f'Opinions on {self.query}: '
-        for key, content_item in content_object.items():
-            gpt_prompt += f'{content_item["text"]} '
-
-        openai.api_key = self.openai_key
-        content_object['gpt'] = {'text': openai.Completion.create(
-            engine="text-davinci-002",
-            prompt=gpt_prompt,
-            temperature=0.5,
-            max_tokens=256,
-            top_p=1.0,
-            frequency_penalty=0.0,
-            presence_penalty=0.0
-        ).choices[0].text}
-        return content_object
-
     def add_most_controversial_tweets(self, content_object, tweets, vader_scores):
-        most_negative_index, most_positive_index = misc.find_min_and_max_float_index(vader_scores['compound'])
-        most_negative_tweet = tweets.data[most_negative_index]
-        most_positive_tweet = tweets.data[most_positive_index]
+        most_positive_index, most_positive_tweet, most_negative_index, most_negative_tweet = \
+            self.get_most_extreme_tweets(tweets, vader_scores)
 
         image_data_dict = self.feeder.extract_tweet_images(keys=['most_negative_tweet', 'most_positive_tweet'],
                                                            tweet_id=[most_negative_tweet.id, most_positive_tweet.id],
@@ -247,6 +195,13 @@ class ContentCreator:
         if emoji_count(text) > 9:
             return False
         return True
+
+    @staticmethod
+    def get_most_extreme_tweets(tweets, vader_scores: Dict) -> Tuple[int, Tweet, int, Tweet]:
+        most_negative_index, most_positive_index = misc.find_min_and_max_float_index(vader_scores['compound'])
+        most_negative_tweet = tweets.data[most_negative_index]
+        most_positive_tweet = tweets.data[most_positive_index]
+        return most_positive_index, most_positive_tweet, most_negative_index, most_negative_tweet
 
 
 if __name__ == "__main__":

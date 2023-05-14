@@ -46,7 +46,7 @@ def html_to_png(media_url, file_path):
     # Take a screenshot of the element and save it as a PNG image
     screenshot = driver.get_screenshot_as_png()
     im = Image.open(BytesIO(screenshot))
-    im = im.crop((left, top + 80, right + 200, 500))
+    im = im.crop((left, top + 80, right + 200, bottom))
     im.save(file_path)
 
     # Check if file was saved successfully
@@ -69,6 +69,7 @@ def remove_urls_and_emojis_and_leave_only_english_text(text):
     text = emoji.replace_emoji(text, '')
 
     # Define the range of Unicode characters for the English alphabet
+    basic_latin = (32)
     english_alpha_1 = (65, 90)
     english_alpha_2 = (97, 122)
 
@@ -81,7 +82,8 @@ def remove_urls_and_emojis_and_leave_only_english_text(text):
         char_unicode = ord(char)
         if char_unicode in range(*english_alpha_1) \
                 or char_unicode in range(*english_alpha_2) \
-                or char_unicode in range(*diacritical):
+                or char_unicode in range(*diacritical)\
+                or char_unicode == basic_latin:
             cleaned_text += char
 
     return cleaned_text

@@ -4,7 +4,7 @@ from mutagen.mp3 import MP3
 from utils.console import print_step, print_substep
 
 
-def save_text_to_mp3(content_objects):
+def save_text_to_mp3(content_object):
     """Saves Text to MP3 files.
 
     Args:
@@ -17,7 +17,7 @@ def save_text_to_mp3(content_objects):
     # Create a folder for the mp3 files.
     Path("assets/mp3").mkdir(parents=True, exist_ok=True)
 
-    for key, content_item in content_objects.items():
+    for key, content_item in content_object.items():
         tts = gTTS(text=content_item["text"], lang="en", slow=False)
         tts.save(f"assets/mp3/{key}.mp3")
         audio_durations_per_statistic.append(MP3(f"assets/mp3/{key}.mp3").info.length)

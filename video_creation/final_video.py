@@ -76,22 +76,41 @@ def make_final_video_with_gpt(content_object):
     create_folders_if_necessary('assets/png')
 
     # get gpt item and total duration of gpt text
-    gpt_item_key = content_object.keys()[-1]
-    gpt_content_item = content_object[gpt_item_key]
-    gpt_audio_clip = AudioFileClip(f"assets/mp3/{gpt_content_item}.mp3")
+    gpt_audio_clip = AudioFileClip(f"assets/mp3/gpt.mp3")
     total_duration = gpt_audio_clip.duration
+    individual_duration = total_duration / (len(content_object['gpt']['graphs'].items()))
 
-    # get all other items and estimate their individual audio duration
-    intro_duration = AudioFileClip(f"assets/mp3/{content_object.items()[0]}.mp3").duration
-    # individual duration is the duration of each content part excluding intro, outro and gpt
-    individual_duration = (total_duration - intro_duration) / (len(content_object.items()) - 3)
-    for key, content_item in content_object.items():
+    # for key, content_item in content_object.items():
+    #     audio_clips.append(AudioFileClip(f"assets/mp3/{key}.mp3"))
+    #     image_path = f"assets/png/{key}.png"
+    #     if content_item.keys().__len__() == 1:
+    #         # Intro clip
+    #         video_clips.append(
+    #             TextClip(content_item['text'], fontsize=70, color='black', bg_color='white', size=(W - 100, H),
+    #                      method='caption')
+    #             .set_position(('center', 'bottom'))
+    #             .set_duration(individual_duration)
+    #             .set_opacity(float(opacity))
+    #         )
+    #     else:
+    #         if 'graph' in content_item.keys():
+    #             save_figure_if_graph(content_item, image_path)
+    #         video_clips.append(
+    #             ImageClip(image_path)
+    #             .set_duration(individual_duration)
+    #             .set_position("center")
+    #             .resize(width=W - 100)
+    #             .set_opacity(float(opacity)),
+    #         )
+
+    audio_clips.append(AudioFileClip(f"assets/mp3/gpt.mp3"))
+    for key, content_item in content_object['gpt']['graphs'].items():
         image_path = f"assets/png/{key}.png"
-        if key == content_object.keys()[0]:
+        if key == list(content_object['gpt']['graphs'].keys())[0]:
             # Intro clip
             video_clips.append(TextClip(content_item['text'], fontsize=70, color='black', bg_color='white')
                                .set_position(('center', 'bottom'))
-                               .set_duration(audio_clips[-1].duration)
+                               .set_duration(individual_duration)
                                .set_opacity(float(opacity))
                                )
         if content_item.keys().__len__() == 2:
