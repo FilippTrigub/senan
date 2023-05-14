@@ -14,24 +14,24 @@ def get_emoji_count_statistic(sentences, scores):
     return {'data': counter_list, 'correlation': correlation_with_scores}
 
 
-def unique_word_ratio(sentence):
+def _unique_word_ratio(sentence):
     words = sentence.split()
     unique_words = set(words)
     return len(unique_words) / len(words)
 
 
 def get_lexical_diversity_statistic(sentences, scores):
-    lexical_diversity = [unique_word_ratio(sentence) for sentence in sentences]
+    lexical_diversity = [_unique_word_ratio(sentence) for sentence in sentences]
     correlation_with_scores = np.corrcoef(lexical_diversity, scores['compound'])[0][1]
     return {'data': lexical_diversity, 'correlation': correlation_with_scores}
 
 
-def average_word_length(sentence):
+def _average_word_length(sentence):
     words = sentence.split()
     return sum(len(word) for word in words) / len(words)
 
 
 def get_average_word_length_statistic(sentences, scores):
-    average_word_length = [average_word_length(sentence) for sentence in sentences]
+    average_word_length = [_average_word_length(sentence) for sentence in sentences]
     correlation_with_scores = np.corrcoef(average_word_length, scores['compound'])[0][1]
     return {'data': average_word_length, 'correlation': correlation_with_scores}

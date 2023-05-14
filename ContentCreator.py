@@ -8,7 +8,9 @@ import argparse
 from dotenv import load_dotenv
 
 from Feeder import TwitterFeeder
-from GraphContentGenerator import GraphContentGenerator
+from GraphContentGenerator import get_basic_score_object, get_compound_vs_length_object, \
+    get_compound_vs_emoji_count_object, get_compound_vs_average_word_length_object, \
+    get_compound_vs_lexical_diversity_object
 from SentimentAnalyzer import SentimentAnalyzer
 from tweet_statistics import get_length_statistic, get_emoji_count_statistic, get_lexical_diversity_statistic, \
     get_average_word_length_statistic
@@ -23,6 +25,15 @@ class ContentCreator:
     query = 'dummy_query'
     default_config_path = 'config.yaml.template'
     use_gpt = False
+    STATISTICS = ['lengths', 'emoji counts', 'lexical diversity', 'average word length']
+    STATISTICS_GETTER_MAPPING = {STATISTICS[0]: get_length_statistic,
+                                 STATISTICS[1]: get_emoji_count_statistic,
+                                 STATISTICS[2]: get_lexical_diversity_statistic,
+                                 STATISTICS[3]: get_average_word_length_statistic}
+    STATISTICS_OBJECT_MAPPING = {STATISTICS[0]: get_compound_vs_length_object,
+                                 STATISTICS[1]: get_compound_vs_emoji_count_object,
+                                 STATISTICS[2]: get_compound_vs_lexical_diversity_object,
+                                 STATISTICS[3]: get_compound_vs_average_word_length_object}
 
     def __init__(self):
         self.feeder = None
@@ -83,15 +94,10 @@ class ContentCreator:
         :param scores: VADER scores, DataFrame
         :return: statistics, dict of dicts
         """
-        statistics = {'lengths': get_length_statistic(sentences, scores),
-                      'emoji counts': get_emoji_count_statistic(sentences, scores),
-                      'lexical diversity': get_lexical_diversity_statistic(sentences, scores),
-                      'average word length': get_average_word_length_statistic(sentences, scores)}
-        return statistics
+        return {key: self.STATISTICS_GETTER_MAPPING[key](sentences, scores) for key in self.STATISTICS}
 
     def create_content(self, vader_scores, statistics):
         misc.remove_files_in_dir('assets/png')
-        # todo create more graphs based on analysis
         content_text = self.get_text_for_images(vader_scores, statistics)
         content_object = self.create_content_object_without_gpt(content_text, vader_scores, statistics)
 
@@ -192,20 +198,10 @@ class ContentCreator:
             if key == 'intro_text':
                 content_object[key] = {'text': content_item}
             elif key == 'score_text':
-                basic_score_object = \
-                    GraphContentGenerator.get_basic_score_object(content_item, vader_scores)
-                content_object[key] = basic_score_object
-            elif key == 'lengths':
-                compound_vs_length_object = \
-                    GraphContentGenerator.get_compound_vs_length_object(content_item, vader_scores, statistics[key])
-                content_object[key] = compound_vs_length_object
-            elif key == 'emoji counts':
-                compound_vs_emoji_count_object = \
-                    GraphContentGenerator.get_compound_vs_emoji_count_object(content_item, vader_scores,
-                                                                             statistics[key])
-                content_object[key] = compound_vs_emoji_count_object
-                # todo sync all the terminology
-        return content_object
+                content_object[key] = get_basic_score_object(content_item, vader_scores)
+            elif key in statistics.keys():
+                content_object[key] = self.STATISTICS_OBJECT_MAPPING[key](content_item, vader_scores, statistics[key])
+            return content_object
 
     def create_content_object_with_gpt(self, content_object):
         gpt_prompt = f'Make the following text to sound engaging, enthusiastic and less than 60 seconds long:' \
@@ -246,7 +242,8 @@ class ContentCreator:
             'image': image_data_dict[most_positive_tweet.id]}
         return content_object
 
-    def tweet_is_valid(self, text):
+    @staticmethod
+    def tweet_is_valid(text):
         if emoji_count(text) > 9:
             return False
         return True
