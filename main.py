@@ -1,5 +1,6 @@
 # This is a sample Python script.
 import argparse
+import os
 
 from dotenv import load_dotenv
 
@@ -8,7 +9,7 @@ from LLMPoweredContentCreator import LLMPoweredContentCreator
 from YouTubeUploader import upload_video_to_youtube
 
 
-def parse_arguements():
+def parse_arguments():
     parser = argparse.ArgumentParser(
         description=("SENAN - Sentiment Analysis and Content Creation."),
         epilog="Designed by Trigub"
@@ -25,16 +26,20 @@ if __name__ == '__main__':
     UPLOAD = False
 
     load_dotenv()
-    args = parse_arguements()
 
-    if args.llm:
+    if os.getenv('USE_LLM'):
         content_creator = LLMPoweredContentCreator()
     else:
         content_creator = ContentCreator()
 
-    filename = content_creator.create()
+    text_filename, video_filename = content_creator.create()
+
+    print(f"Text saved to {text_filename}.\nVideo saved to {video_filename}.")
 
     if UPLOAD:
         # the category id 24 is Entertainment
-        upload_video_to_youtube(filename, content_creator.query, f'What people think about {content_creator.query}.',
+        upload_video_to_youtube(video_filename,
+                                content_creator.query,
+                                f'What people think about {content_creator.query}.',
                                 category=24, privacy='Private')
+        print("Upload done.")

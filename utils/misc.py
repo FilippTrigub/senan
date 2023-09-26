@@ -56,7 +56,10 @@ def html_to_png(media_url, file_path):
         print("Error: file not saved.")
 
 
-def remove_urls_and_emojis_and_leave_only_english_text(text):
+def remove_anything_but_english_text(text):
+    # Remove Hashtags
+    text = re.sub(r'#\S+', '', text)
+
     # Remove URLs
     url_pattern = re.compile(r'https?://\S+|www\.\S+')
     text = url_pattern.sub('', text)

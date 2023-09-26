@@ -30,6 +30,7 @@ class TwitterFeeder:
 
     # get tweets
     def get_query_tweets(self):
+        # todo auth does not work anymore
         self.query_tweets = self.client.search_recent_tweets(query=self.QUERY,
                                                              max_results=self.quantity_of_tweets,
                                                              expansions=['referenced_tweets.id',

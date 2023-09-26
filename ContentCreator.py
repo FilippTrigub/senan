@@ -1,4 +1,6 @@
 import os
+import re
+from datetime import datetime
 from typing import Dict, Tuple
 
 import numpy as np
@@ -14,6 +16,7 @@ from SentimentAnalyzer import SentimentAnalyzer
 from tweet_statistics import get_length_statistic, get_emoji_count_statistic, get_lexical_diversity_statistic, \
     get_average_word_length_statistic
 from utils import misc
+from utils.file_management import save_content_to_text_file
 from video_creation.background import download_background, chop_background_video
 from video_creation.final_video import make_final_video
 from video_creation.voices import save_text_to_mp3
@@ -65,10 +68,13 @@ class ContentCreator:
         # create content
         content_object = self.create_content(tweets, vader_scores, statistics)
 
-        # make the video
-        filename = self.make_video(content_object, self.use_gpt)
+        # save content object as text file
+        text_filename = save_content_to_text_file(content_object)
 
-        return filename
+        # make the video
+        video_filename = self.make_video(content_object)
+
+        return text_filename, video_filename
 
     def convert_tweets(self, tweets):
         tweet_texts = [tweet.text for tweet in tweets.data if self.tweet_is_valid(tweet.text)]
@@ -97,7 +103,7 @@ class ContentCreator:
 
         return content_object
 
-    def make_video(self, content_object, use_gpt):
+    def make_video(self, content_object):
         total_audio_duration, _ = save_text_to_mp3(content_object)
         download_background()
         chop_background_video(total_audio_duration)
@@ -162,6 +168,7 @@ class ContentCreator:
 
     def create_content_object(self, content_text, vader_scores, statistics) -> Dict[str, Dict[str, str]]:
         content_object = dict()
+        content_object['timestamp'] = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         for key, content_item in content_text.items():
             if key == 'intro_text':
                 content_object[key] = {'text': content_item}
@@ -169,7 +176,7 @@ class ContentCreator:
                 content_object[key] = get_basic_score_object(content_item, vader_scores)
             elif key in statistics.keys():
                 content_object[key] = self.STATISTICS_OBJECT_MAPPING[key](content_item, vader_scores, statistics[key])
-            return content_object
+        return content_object
 
     def add_most_controversial_tweets(self, content_object, tweets, vader_scores):
         most_positive_index, most_positive_tweet, most_negative_index, most_negative_tweet = \
@@ -183,10 +190,10 @@ class ContentCreator:
                                                                    'username']])
 
         content_object['most_negative_tweet'] = {
-            'text': misc.remove_urls_and_emojis_and_leave_only_english_text(most_negative_tweet.text),
+            'text': misc.remove_anything_but_english_text(most_negative_tweet.text),
             'image': image_data_dict[most_negative_tweet.id]}
         content_object['most_positive_tweet'] = {
-            'text': misc.remove_urls_and_emojis_and_leave_only_english_text(most_positive_tweet.text),
+            'text': misc.remove_anything_but_english_text(most_positive_tweet.text),
             'image': image_data_dict[most_positive_tweet.id]}
         return content_object
 

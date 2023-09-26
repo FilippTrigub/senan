@@ -11,6 +11,7 @@ from moviepy.editor import (
 import re
 
 from moviepy.video.VideoClip import TextClip
+from moviepy.video.fx.speedx import speedx
 
 from utils.console import print_step
 from dotenv import load_dotenv
@@ -53,7 +54,7 @@ def make_final_video(content_object):
                 .set_position(('center', 'bottom'))
                 .set_duration(audio_clips[-1].duration)
                 .set_opacity(float(opacity))
-                )
+            )
         else:
             if 'graph' in content_item.keys():
                 save_figure_if_graph(content_item, image_path)
@@ -64,7 +65,7 @@ def make_final_video(content_object):
                 .resize(width=W - 100)
                 .set_opacity(float(opacity)),
             )
-    filename = _save_video(audio_clips, video_clips, background_clip)
+    filename = _save_video(audio_clips, video_clips, background_clip, content_object['timestamp'])
     return filename
 
 
@@ -79,29 +80,6 @@ def make_final_video_with_gpt(content_object):
     gpt_audio_clip = AudioFileClip(f"assets/mp3/gpt.mp3")
     total_duration = gpt_audio_clip.duration
     individual_duration = total_duration / (len(content_object['gpt']['graphs'].items()))
-
-    # for key, content_item in content_object.items():
-    #     audio_clips.append(AudioFileClip(f"assets/mp3/{key}.mp3"))
-    #     image_path = f"assets/png/{key}.png"
-    #     if content_item.keys().__len__() == 1:
-    #         # Intro clip
-    #         video_clips.append(
-    #             TextClip(content_item['text'], fontsize=70, color='black', bg_color='white', size=(W - 100, H),
-    #                      method='caption')
-    #             .set_position(('center', 'bottom'))
-    #             .set_duration(individual_duration)
-    #             .set_opacity(float(opacity))
-    #         )
-    #     else:
-    #         if 'graph' in content_item.keys():
-    #             save_figure_if_graph(content_item, image_path)
-    #         video_clips.append(
-    #             ImageClip(image_path)
-    #             .set_duration(individual_duration)
-    #             .set_position("center")
-    #             .resize(width=W - 100)
-    #             .set_opacity(float(opacity)),
-    #         )
 
     audio_clips.append(AudioFileClip(f"assets/mp3/gpt.mp3"))
     for key, content_item in content_object['gpt']['graphs'].items():
@@ -125,15 +103,15 @@ def make_final_video_with_gpt(content_object):
                 .set_opacity(float(opacity)),
             )
 
-    filename = _save_video(audio_clips, video_clips, background_clip)
+    filename = _save_video(audio_clips, video_clips, background_clip, content_object['timestamp'])
     return filename
 
 
-def _save_video(audio_clips, video_clips, background_clip):
-    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-
+def _save_video(audio_clips, video_clips, background_clip, timestamp):
     audio_concat = concatenate_audioclips(audio_clips)
     audio_composite = CompositeAudioClip([audio_concat])
+
+    video_clips = [clip.fx(speedx, 1.2) for clip in video_clips]
     video_concat = concatenate_videoclips(video_clips).set_position(
         ("center", "center")
     )
