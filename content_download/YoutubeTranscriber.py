@@ -53,45 +53,8 @@ class YouTubeTranscriber:
         os.system(f'ffmpeg -i {self.video_file_path} {self.video_file_path.split(".")[0] + ".wav"}')
         self.video_file_path = self.video_file_path.split(".")[0] + ".wav"
 
-        # ydl_opts = {
-        #     'format': 'bestaudio/best',
-        #     'postprocessors': [{
-        #         'key': 'FFmpegExtractAudio',
-        #         'preferredcodec': 'wav',
-        #         'preferredquality': '192',
-        #     }],
-        #     'outtmpl': self.video_file_path,
-        # }
-
-        # with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        #     ydl.download([self.url])
-
     def transcribe(self):
-        transcriptions = self.transcriber.transcribe(os.path.join('assets','youtube_videos','2023_09_26_13_51_20_HrCIWSUXRmo.wav'))
-        self.save_to_file(transcriptions)
-
-    #     # Load pre-trained model and tokenizer from Huggingface
-    #     model = Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-base-960h")
-    #     tokenizer = Wav2Vec2Tokenizer.from_pretrained("facebook/wav2vec2-base-960h")
-    #
-    #     # Load audio file
-    #     speech, _ = sf.read(self.file_path)
-    #
-    #     # Tokenize speech
-    #     inputs = tokenizer(speech, return_tensors="pt", padding="longest")
-    #
-    #     # Get the predicted tokens
-    #     with torch.no_grad():
-    #         logits = model(input_values=inputs.input_values).logits
-    #
-    #     # Decode the tokens to text
-    #     predicted_ids = torch.argmax(logits, dim=-1)
-    #     transcription = tokenizer.batch_decode(predicted_ids)[0]
-    #
-    #     # Clean up the downloaded file
-    #     os.remove(self.file_path)
-    #
-    #     return transcription
+        transcriptions = self.transcriber.transcribe(self.video_file_path)
 
     def save_to_file(self, transcriptions):
         if type(transcriptions) is list:
